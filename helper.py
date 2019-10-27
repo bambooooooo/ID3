@@ -19,6 +19,23 @@ def log(text, level="l"):
         print(text)
         return False
     
+def log2(text, level="l"):
+    if s.debugMode == False or s.deepDebug == False:
+        return True
+    
+    if level == "l":
+        print("[ LOG ] ", text)
+        return True
+    elif level == "w":
+        print("[ WARNING ] ", text)
+        return True
+    elif level == "e":
+        print("[ ERROR ] ", text)
+        return False
+    else:
+        print(text)
+        return False
+    
 def getColumnFromFile(source):
     file = open(source)
     columnList = str(file.readline())
@@ -29,7 +46,7 @@ def getColumnFromFile(source):
 
 def getDataFromFile(source, columnList):
     file = open(source)
-    tmp = str(file.readline())   #TODO: move carret in better way
+    tmp = str(file.readline())   #TODO: move caret in better way
     
     data = []
     
@@ -46,3 +63,6 @@ def getDataFromFile(source, columnList):
     file.close()
     
     return data
+
+print()
+
