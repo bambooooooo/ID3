@@ -1,5 +1,7 @@
 import settings as s
 
+from termcolor import colored
+
 # 1. log() --> print info, warning, error while debug mode is enabled
 
 def log(text, level="l"):
@@ -7,13 +9,13 @@ def log(text, level="l"):
         return True
     
     if level == "l":
-        print("[ LOG ] ", text)
+        print(colored("[ LOG ] ", 'cyan'), text)
         return True
     elif level == "w":
-        print("[ WARNING ] ", text)
+        print(colored("[ WARNING ] ", 'yellow'), text)
         return True
     elif level == "e":
-        print("[ ERROR ] ", text)
+        print(colored("[ ERROR ] ", 'red'), text)
         return False
     else:
         print(text)
@@ -24,13 +26,13 @@ def log2(text, level="l"):
         return True
     
     if level == "l":
-        print("[ LOG ] ", text)
+        print(colored("[ LOG ] ", 'cyan'), text)
         return True
     elif level == "w":
-        print("[ WARNING ] ", text)
+        print(colored("[ WARNING ] ", 'yellow'), text)
         return True
     elif level == "e":
-        print("[ ERROR ] ", text)
+        print(colored("[ ERROR ] ", 'red'), text)
         return False
     else:
         print(text)
@@ -44,7 +46,9 @@ def getColumnFromFile(source):
     file.close()
     return columnList
 
-def getDataFromFile(source, columnList):
+def getDataFromFile(source):
+    columnList = getColumnFromFile(source)
+    
     file = open(source)
     tmp = str(file.readline())   #TODO: move caret in better way
     
@@ -64,5 +68,11 @@ def getDataFromFile(source, columnList):
     
     return data
 
-print()
+def BP():
+    input('[ DEBUG ] Waiting for key...')
 
+'''TODO
+
+getDataFromFile + logs in helper.py as for tree in main
+
+'''
