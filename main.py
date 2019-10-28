@@ -1,5 +1,6 @@
 import math
 import pydotplus as ptp
+import time
 
 
 import helper as h
@@ -41,13 +42,16 @@ class leaf(): # LEAF - specific decision
         
     def getItemIndex(self):
         return self.itemIndex                       # [!] must match with root.getItemIndex()
+    
+    def getDecision(self):
+        return self.response
         
 class node():
     def __init__(self, S, column, value, fromIndex): # Edge instance
         self.S = S
         self.column = column
         self.value = value
-        self.end = self.getNodeEnd()                 # Check if it going to be [LEAF] or another [ROOT]
+        self.end = self.addNodeEnd()                 # Check if it going to be [LEAF] or another [ROOT]
         self.fromIndex = fromIndex                   # Index of root that is parent to node - to edge in diagram
         self.endIndex = self.getNodeEndIndex()       # Index of [ROOT] or [LEAF] that ends node instance
         
@@ -56,9 +60,14 @@ class node():
     def getDecisionFromRow(self, row):
         return row[list(row)[-1]]                    # Get last value from dictionary
         #for example {'firstName': 'Will', 'lastName': 'Smith', 'decsion': 'boy'} ===> 'boy'
-        
     
     def getNodeEnd(self):
+        return self.end
+    
+    def getNodeValue(self):
+        return self.value
+    
+    def addNodeEnd(self):
         #check amount of decision for specified value of key
         firstDecision = None
         for row in self.S:
@@ -123,6 +132,11 @@ class root():
         
     
     #HELPER FUNCTIONS
+    def getNodeByValue(self, value):
+        for item in self.node:
+            if item.getNodeValue() == value:
+                return item
+    
     def getItemIndex(self):
         return self.itemIndex
     
@@ -233,6 +247,18 @@ class root():
             
         return output
     
+    def trimRowByColumn(self, row, column):
+        # removing given colum 
+        # [TODO]: use map / filter / recude instead of building output like now
+        singleRow = dict()
+
+        for key, value in row.items():
+            if key != column:
+                singleRow[key] = value
+           
+        return singleRow
+            
+    
         
     #ROOT ACTIONS
     def selectColumn(self):
@@ -245,35 +271,90 @@ class root():
         
         for value in list(self.getValList(self.S, self.column).keys()):
             h.log("Append node (S,"+self.column+", "+value +")")
-            self.node.append(node(self.S, self.column, value, self.itemIndex))  
+            self.node.append(node(self.S, self.column, value, self.itemIndex))
             # add node, add node, ...
+            
+    def getDecision(self, requestRow):
+        #print("requestRow: ", requestRow)
+        if len(requestRow) <= 0:
+            h.log("Insufficient or broken request, unknown decision", "e")
+            return False
+        else:
+            h.log2("-"+self.column+"?")
+            nextNode = requestRow[self.column]
+            h.log2("---"+nextNode)
+            nextItem = self.getNodeByValue(nextNode)
+            nodeEnd = nextItem.getNodeEnd()
+            if nodeEnd.__class__.__name__ == 'root':
+                return nodeEnd.getDecision(self.trimRowByColumn(requestRow, self.column))
+            elif nodeEnd.__class__.__name__ == 'leaf':
+                h.log2("[Decision]: " + nodeEnd.getDecision())
+                return nodeEnd.getDecision()
+            else:
+                h.log("Something is not yes here", "e")
              
             
 def main():
     
-    data = h.getDataFromFile(s.trainFile)   # open data file
-    if not data:
+    trainData = h.getDataFromFile(s.trainFile)   # open data file
+    if not trainData:
         return False                        # data open error - exit
     
-    tree = root(data)                       # power on carousel - load data from training source
+    tree = root(trainData)                       # power on carousel - load data from training source
     
     
     #printing diagram
     #[TODO] - pack it into treeDrawer.draw()
-    graph = ptp.Dot(graph_type='graph')
-    color = 'white'
+    if s.drawTree:
+        graph = ptp.Dot(graph_type='graph')
+        color = 'white'
+        
+        for e in tc.edges:
+            h.log("Add node from " + str(e[0]) + " to " + str(e[1]))
+            edge = ptp.Edge(src=e[0], dst=e[1], label=e[2])
+            graph.add_edge(edge)
+        for n in tc.nodes:
+            node = ptp.Node(name=n[0], label= n[1], fillcolor="white", style="filled", shape="box" )
+            graph.add_node(node)
+        
+        graph.write_png("tree.png")
+        
+        img = Image.open("tree.png")
+        img.show()
+        
+    # check tree's accuary    
+    h.log("Checking tree with check dataset...")
+    checkData = h.getDataFromFile(s.checkFile)
+    correctAmount = 0
     
-    for e in tc.edges:
-        h.log("Add node from " + str(e[0]) + " to " + str(e[1]))
-        edge = ptp.Edge(src=e[0], dst=e[1], label=e[2])
-        graph.add_edge(edge)
-    for n in tc.nodes:
-        node = ptp.Node(name=n[0], label= n[1], fillcolor="white", style="filled", shape="box" )
-        graph.add_node(node)
+    l = len(checkData)
+    printProgressBar(0, l, prefix = 'Checking:', suffix = 'Complete', length = 50)
     
-    graph.write_png("tree.png")
+    invalidRows = []
     
-    img = Image.open("tree.png")
-    img.show()
+    for i, row in enumerate(checkData):
+        decision = row[list(row)[-1]]
+        
+        singleRow = dict()
+
+        for key, value in row.items():
+            if key != list(row)[-1]:
+                singleRow[key] = value
+           
+        
+        correctDecision = tree.getDecision(singleRow)
+        #print(decision, " vs ", correctDecision)
+        if decision == correctDecision:    
+            #h.log("["+str(i)+"] Decision correct")
+            correctAmount += 1
+        else:
+            invalidRows.append(i)
+            #h.log("["+str(i)+"] Decision incorrect ")
+        
+        time.sleep(0.2)
+        printProgressBar(i + 1, l, prefix = 'Checking:', suffix = 'Complete', length = 50)
+            
+    accuary = correctAmount / len(checkData)
+    h.log("Tree accuary is: " + str(correctAmount) + "/" + str(len(checkData))  + " ("+ str(accuary*100) + "%)")
     
 main()
