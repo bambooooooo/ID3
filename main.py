@@ -1,25 +1,65 @@
 import math
+import pydotplus as ptp
+
 
 import helper as h
 import settings as s
 
-class leaf():
+from PIL import Image
+
+ 
+class treeDrawer(): # accumulator for all nodes and egdes
+    
+    def __init__(self):
+        self.edges = []
+        self.nodes = []
+        self.counter = 0
+        
+    def addNode(self, index, label):
+        self.nodes.append((index, label))
+        
+    def addEdge(self, fromIndex, toIndex, label):
+        self.edges.append((fromIndex, toIndex, label))
+        
+    def addIndex(self):
+        self.counter += 1
+        return self.counter
+    
+    def getLast(self):
+        return self.counter
+    
+tc = treeDrawer()
+    
+
+class leaf(): # LEAF - specific decision
+    
     def __init__(self, response):
-        self.response = response
+        
+        self.response = response                    # eq - decision value
+        tc.addNode(tc.addIndex(), self.response)    # add edge to accumulator
+        self.itemIndex = tc.getLast()               # set Index to instance
+        
+    def getItemIndex(self):
+        return self.itemIndex                       # [!] must match with root.getItemIndex()
         
 class node():
-    def __init__(self, S, column, value):
+    def __init__(self, S, column, value, fromIndex): # Edge instance
         self.S = S
         self.column = column
         self.value = value
-        self.end = self.getNodeEnd()
+        self.end = self.getNodeEnd()                 # Check if it going to be [LEAF] or another [ROOT]
+        self.fromIndex = fromIndex                   # Index of root that is parent to node - to edge in diagram
+        self.endIndex = self.getNodeEndIndex()       # Index of [ROOT] or [LEAF] that ends node instance
+        
+        tc.addEdge(self.fromIndex, self.endIndex, self.value)   # add node to accumulator
         
     def getDecisionFromRow(self, row):
-        return row[list(row)[-1]]
+        return row[list(row)[-1]]                    # Get last value from dictionary
+        #for example {'firstName': 'Will', 'lastName': 'Smith', 'decsion': 'boy'} ===> 'boy'
         
     
     def getNodeEnd(self):
-        #check amount of decision for specified key
+        #check amount of decision for specified value of key
         firstDecision = None
         for row in self.S:
             if row[self.column] == self.value and firstDecision == None:
@@ -27,13 +67,20 @@ class node():
                 continue
             
             if firstDecision != self.getDecisionFromRow(row) and row[self.column] == self.value:
-                h.log("End of node will be: root")
+                h.log("End of node will be: root") #for specified value for some column we have different decision
+                                                   #it will be another root
                 return root(self.trimSetByColumn(self.S, self.column, self.value))
-                
         h.log("End of node will be: leaf")
-        return leaf(self.value)
+        return leaf(firstDecision)                 # decisions for value are the same so we are sure we got an answear
+    
+    def getNodeEndIndex(self):
+        return self.end.getItemIndex()
+        
                 
     def trimSetByColumn(self, S, column, keyValue):
+        # removing every row where value of column not match with given
+        # removing given colum also
+        # [TODO]: use map / filter / recude instead of building output like now
         output = []
         for row in S:
             singleRow = dict()
@@ -54,29 +101,40 @@ class node():
 
 class root():
     
-    def __init__(self, S):
+    def __init__(self, S):  # RRRRROOT instance
+        
         #ROOT LIFECYCLE
         self.node = []
         self.S = S
         self.column = self.getColumn()
         self.bestGain = 0
         
-        self.selectColumn()
+        self.selectColumn() # Set of functions that calculate Entropy
+                            #                                 Conditional Entropy
+                            #                                 Gain
+                            #          for select column with the best gain that will represents root instance
         
         h.log("Another root ["+self.column+"]")
+
+        tc.addNode(tc.addIndex(), self.column)  # add node to accumulator
         
-        self.addNodes()
+        self.itemIndex = tc.getLast()
+        self.addNodes()                         # add list with every kind of value for selected column
         
-        #print(self.node)
     
     #HELPER FUNCTIONS
+    def getItemIndex(self):
+        return self.itemIndex
+    
     def getColumn(self):
-        return list(self.S[0].keys())[:-1]
+        return list(self.S[0].keys())[:-1]  #get list of column without, of course, decision which is the last item
     
     def computeEntropy(self, S):
-        h.log("Compute entropy...")
+        h.log("Compute entropy...")     # Computing entropy for root instance
+                                        # Ent(S)
         entropy = dict()
         
+        # [TODO]: move to helper class
         for row in S:
             decision = list(row)[-1]   
             
@@ -86,8 +144,8 @@ class root():
                 entropy[row[decision]] = 1
         
         omega = len(S)
-        
         output = 0
+        
         
         for item in entropy:
             h.log2(str(entropy[item] / omega))
@@ -97,7 +155,8 @@ class root():
         return output
     
     def computeGain(self, S, totalEnt):
-        h.log("Computing gain for nodes...")
+        h.log("Computing gain for nodes...") # prepare set of gains to select best of them later
+                                             # Gain = Ent(S) - Ent(S|a)
         output = dict()
         column = self.getColumn()
         
@@ -135,6 +194,8 @@ class root():
         return output
     
     def getBestColumn(self, gainList):
+        # return column name with the best gain
+        # [TODO]: make it better cos it sucks
         best = max(gainList.values())
         for key, value in gainList.items():
             if value == best:
@@ -142,6 +203,7 @@ class root():
                 return key
             
     def countDecisionWhereKeyEqual(self, S, key, value, decision):
+        #something like SQL: SELECT COUNT(decision) WHERE column = value AND decision = given decision
         output = 0
         for row in S:
             if row[key] == value and row[list(row)[-1]] == decision:
@@ -150,17 +212,18 @@ class root():
         return output
             
     def getAvailableDecision(self, S):
-        #todo - get it after object's init cos he will not change itself
+        #return list of available decision, for example ['YES', 'NO']
         output = []
         for row in S:
             if row[list(row)[-1]] in output:
                 pass
             else:
                 output.append(row[list(row)[-1]])
-                
+
         return output
     
     def getValList(self, S, key):
+        # count occurs the same value of key in given S
         output = dict()
         for row in S:
             if row[key] in output.keys():
@@ -175,24 +238,42 @@ class root():
     def selectColumn(self):
         self.entropy = self.computeEntropy(self.S)           #   Ent(S)
         gainList = self.computeGain(self.S, self.entropy)    #   Ent(S|a)
-        self.column = self.getBestColumn(gainList)           #   The Best Gain(S|a)
+        self.column = self.getBestColumn(gainList)           #   The Best Gain(S|a) - column / representant
         
     def addNodes(self):
-         
-        # for    specific   value   in     set of possibles
+        # for    each value that can occur for root's column
+        
         for value in list(self.getValList(self.S, self.column).keys()):
             h.log("Append node (S,"+self.column+", "+value +")")
-                        
-            self.node.append(node(self.S, self.column, value))    
+            self.node.append(node(self.S, self.column, value, self.itemIndex))  
+            # add node, add node, ...
              
             
 def main():
     
+    data = h.getDataFromFile(s.trainFile)   # open data file
+    if not data:
+        return False                        # data open error - exit
     
-    data = h.getDataFromFile(s.trainFile)
-    tree = root(data)
+    tree = root(data)                       # power on carousel - load data from training source
     
     
+    #printing diagram
+    #[TODO] - pack it into treeDrawer.draw()
+    graph = ptp.Dot(graph_type='graph')
+    color = 'white'
     
+    for e in tc.edges:
+        h.log("Add node from " + str(e[0]) + " to " + str(e[1]))
+        edge = ptp.Edge(src=e[0], dst=e[1], label=e[2])
+        graph.add_edge(edge)
+    for n in tc.nodes:
+        node = ptp.Node(name=n[0], label= n[1], fillcolor="white", style="filled", shape="box" )
+        graph.add_node(node)
+    
+    graph.write_png("tree.png")
+    
+    img = Image.open("tree.png")
+    img.show()
     
 main()

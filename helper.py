@@ -21,6 +21,8 @@ def log(text, level="l"):
         print(text)
         return False
     
+# 2. log2() --> same as log, but for deeper logs that can be also disabled
+    
 def log2(text, level="l"):
     if s.debugMode == False or s.deepDebug == False:
         return True
@@ -37,20 +39,30 @@ def log2(text, level="l"):
     else:
         print(text)
         return False
+
+# 3. getColumnFromFile --> get list of column that takes place in the first row of file
     
 def getColumnFromFile(source):
-    file = open(source)
-    columnList = str(file.readline())
-    columnList = columnList.replace("\n", "")
-    columnList = columnList.split(';')
-    file.close()
-    return columnList
+    try:
+        file = open(source)
+        columnList = str(file.readline())
+        columnList = columnList.replace("\n", "")
+        columnList = columnList.split(';')
+        file.close()
+        return columnList
+    except FileNotFoundError:
+        log("Train data file ["+s.trainFile+"] does not exists", "e")
+        return False
 
+# 4. getDataFromFile --> return list of object row each row of data
 def getDataFromFile(source):
     columnList = getColumnFromFile(source)
     
+    if not columnList:
+        return False
+    
     file = open(source)
-    tmp = str(file.readline())   #TODO: move caret in better way
+    tmp = str(file.readline())   #TODO: move caret in better way, cos it sucks
     
     data = []
     
@@ -69,10 +81,5 @@ def getDataFromFile(source):
     return data
 
 def BP():
-    input('[ DEBUG ] Waiting for key...')
+    input('[ DEBUG ] Waiting for key...') # Debbuger Break Point HERE
 
-'''TODO
-
-getDataFromFile + logs in helper.py as for tree in main
-
-'''
