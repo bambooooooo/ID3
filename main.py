@@ -1,12 +1,12 @@
 import math
-import pydotplus as ptp
 import time
+import sys
 
 
 import helper as h
 import settings as s
 
-from PIL import Image
+
 
  
 class treeDrawer(): # accumulator for all nodes and egdes
@@ -78,13 +78,19 @@ class node():
             if firstDecision != self.getDecisionFromRow(row) and row[self.column] == self.value:
                 h.log("End of node will be: root") #for specified value for some column we have different decision
                                                    #it will be another root
-                return root(self.trimSetByColumn(self.S, self.column, self.value))
+                trimedS = self.trimSetByColumn(self.S, self.column, self.value)
+                if len(trimedS[0]) > 1 and len(trimedS) > 0:
+                    return root(trimedS)
+                else:
+                    return leaf("[UNDEFINED]")
         h.log("End of node will be: leaf")
         return leaf(firstDecision)                 # decisions for value are the same so we are sure we got an answear
     
     def getNodeEndIndex(self):
         return self.end.getItemIndex()
         
+    def computeTrimSetByColumn(self, S, column, keyValue):
+        pass
                 
     def trimSetByColumn(self, S, column, keyValue):
         # removing every row where value of column not match with given
@@ -112,23 +118,27 @@ class root():
     
     def __init__(self, S):  # RRRRROOT instance
         
-        #ROOT LIFECYCLE
-        self.node = []
-        self.S = S
-        self.column = self.getColumn()
-        self.bestGain = 0
-        
-        self.selectColumn() # Set of functions that calculate Entropy
-                            #                                 Conditional Entropy
-                            #                                 Gain
-                            #          for select column with the best gain that will represents root instance
-        
-        h.log("Another root ["+self.column+"]")
-
-        tc.addNode(tc.addIndex(), self.column)  # add node to accumulator
-        
-        self.itemIndex = tc.getLast()
-        self.addNodes()                         # add list with every kind of value for selected column
+        if len(S[0]) <= 1 or len(S) <= 0:
+            h.log("Undefined deciosion for [LEAF]")
+        else:
+            
+            #ROOT LIFECYCLE
+            self.node = []
+            self.S = S
+            self.column = self.getColumn()
+            self.bestGain = 0
+            
+            self.selectColumn() # Set of functions that calculate Entropy
+                                #                                 Conditional Entropy
+                                #                                 Gain
+                                #          for select column with the best gain that will represents root instance
+            
+            h.log("Another root ["+self.column+"]")
+    
+            tc.addNode(tc.addIndex(), self.column)  # add node to accumulator
+            
+            self.itemIndex = tc.getLast()
+            self.addNodes()                         # add list with every kind of value for selected column
         
     
     #HELPER FUNCTIONS
@@ -202,7 +212,7 @@ class root():
 
             output[col] = totalEnt - ent  
             h.log2("Condtional entropy(S, "+str(col)+"): " + str(totalEnt-ent))
-        
+            h.log2("Gain for ["+col+"]: " + str(totalEnt-ent))
         #print(output)
         
         return output
@@ -300,14 +310,21 @@ def main():
     if not trainData:
         return False                        # data open error - exit
     
-    tree = root(trainData)                       # power on carousel - load data from training source
-    
+    tree = None
+    try:
+        tree = root(trainData)                       # power on carousel - load data from training source
+    except AttributeError:
+        h.log("Invalid data", "e")
+        pass
     
     #printing diagram
     #[TODO] - pack it into treeDrawer.draw()
     if s.drawTree:
+        
+        import pydotplus as ptp
+        from PIL import Image
+        
         graph = ptp.Dot(graph_type='graph')
-        color = 'white'
         
         for e in tc.edges:
             h.log("Add node from " + str(e[0]) + " to " + str(e[1]))
@@ -317,44 +334,47 @@ def main():
             node = ptp.Node(name=n[0], label= n[1], fillcolor="white", style="filled", shape="box" )
             graph.add_node(node)
         
-        graph.write_png("tree.png")
+        graph.write_png("./output/" + s.folder +".png")
         
-        img = Image.open("tree.png")
+        img = Image.open("./output/" + s.folder +".png")
         img.show()
         
     # check tree's accuary    
-    h.log("Checking tree with check dataset...")
-    checkData = h.getDataFromFile(s.checkFile)
-    correctAmount = 0
     
-    l = len(checkData)
-    printProgressBar(0, l, prefix = 'Checking:', suffix = 'Complete', length = 50)
     
-    invalidRows = []
-    
-    for i, row in enumerate(checkData):
-        decision = row[list(row)[-1]]
+    if s.checkTree:
+        h.log("Checking tree with check dataset...")
+        checkData = h.getDataFromFile(s.checkFile)
+        correctAmount = 0
         
-        singleRow = dict()
-
-        for key, value in row.items():
-            if key != list(row)[-1]:
-                singleRow[key] = value
-           
         
-        correctDecision = tree.getDecision(singleRow)
-        #print(decision, " vs ", correctDecision)
-        if decision == correctDecision:    
-            #h.log("["+str(i)+"] Decision correct")
-            correctAmount += 1
-        else:
-            invalidRows.append(i)
-            #h.log("["+str(i)+"] Decision incorrect ")
+        invalidRows = []
         
-        time.sleep(0.2)
-        printProgressBar(i + 1, l, prefix = 'Checking:', suffix = 'Complete', length = 50)
+        for i, row in enumerate(checkData):
             
-    accuary = correctAmount / len(checkData)
-    h.log("Tree accuary is: " + str(correctAmount) + "/" + str(len(checkData))  + " ("+ str(accuary*100) + "%)")
+            decision = row[list(row)[-1]]
+            
+            singleRow = dict()
+    
+            for key, value in row.items():
+                if key != list(row)[-1]:
+                    singleRow[key] = value
+               
+            
+            correctDecision = tree.getDecision(singleRow)
+            if decision == correctDecision:    
+                correctAmount += 1
+            else:
+                invalidRows.append(i)
+                
+                
+        accuary = correctAmount / len(checkData)
+        h.log("Tree accuaracy is: " + str(correctAmount) + "/" + str(len(checkData))  + " ("+ str(accuary*100) + "%)")
+        
+        h.log("Invalid rows to delete")
+        print(invalidRows)
+        
+        #h.deleteRow(s.trainFile, invalidRows)
+
     
 main()

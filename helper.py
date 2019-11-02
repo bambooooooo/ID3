@@ -1,4 +1,5 @@
 import settings as s
+import os
 
 from termcolor import colored
 
@@ -70,7 +71,7 @@ def getDataFromFile(source):
     
     while row:
         itemData = str(row).replace("\n","").split(';')
-        item = {}
+        item = dict()
         for i, column in enumerate(columnList):
             item[column] = itemData[i]
         data.append(item)
@@ -79,6 +80,46 @@ def getDataFromFile(source):
     file.close()
     
     return data
+
+# 5. deleteRow -->  #deleting specified rows
+def deleteRow(source, rowList):
+#    confirm = input("Confirm deleting "+str(len(rowList))+" rows: [Y]/[N]")
+    if len(rowList) <= 0:
+        return True
+    confirm = 'y'
+    if not (confirm == 'y' or confirm == 'Y'):
+        return False
+    try:
+        file = open(source)
+        outFile = open(source.replace(".csv","T.csv"), "w")
+
+        data = file.readlines()
+        for i, row in enumerate(data):
+            if i in rowList:    
+                print("remove ["+str(i)+"] row")
+            else:
+                outFile.write(row)
+        outFile.close()
+        file.close()
+        
+        checkAsTrain(source)
+        return False
+    except FileNotFoundError:
+        log("File does not exists", "e")
+        return False
+    
+def checkAsTrain(source):
+    #ONLY DEBUG FUNCTION
+    os.remove(s.trainFile)
+    os.remove(s.checkFile)
+    
+    os.rename(source.replace(".csv","T.csv"), s.trainFile)
+    source = open(s.trainFile)
+    check = open(s.checkFile, "a")
+    check.writelines(source.readlines())
+    check.close()
+    source.close()
+    
 
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     
