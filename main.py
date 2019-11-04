@@ -14,14 +14,19 @@ class treeDrawer(): # accumulator for all nodes and egdes
     def __init__(self):
         self.edges = []
         self.nodes = []
+        self.leafs = []
         self.counter = 0
         
-    def addNode(self, index, label):
-        self.nodes.append((index, label))
+    def addNode(self, index, label, entropy):
+        self.nodes.append((index, label, entropy))
         
     def addEdge(self, fromIndex, toIndex, label):
         self.edges.append((fromIndex, toIndex, label))
-        
+    
+    def addLeaf(self, fromIndex, toIndex, label, values):
+        self.edges.append((fromIndex, toIndex, label, values))
+    
+    
     def addIndex(self):
         self.counter += 1
         return self.counter
@@ -34,17 +39,38 @@ tc = treeDrawer()
 
 class leaf(): # LEAF - specific decision
     
-    def __init__(self, response):
+    def __init__(self, values):
         
-        self.response = response                    # eq - decision value
-        tc.addNode(tc.addIndex(), self.response)    # add edge to accumulator
-        self.itemIndex = tc.getLast()               # set Index to instance
+        self.response = ""                        # eq - decision value
+        self.amount = 0
         
+        self.decisions = []
+        
+        for item in values:
+            self.decisions.append(item[0])
+            self.amount += item[1]
+            
+        for item in values:
+            self.response += item[0] + " " + str(int(round(item[1] / self.amount, 2)*100)) + "%" + '\n'
+            
+        self.response = self.response[:-1]
+        
+        tc.addNode(tc.addIndex(), self.response, "rows: "+str(self.amount))     # add edge to accumulator
+        self.itemIndex = tc.getLast()                   # set Index to instance
+    
+    
     def getItemIndex(self):
         return self.itemIndex                       # [!] must match with root.getItemIndex()
     
     def getDecision(self):
-        return self.response
+        return self.decisions
+    
+    def countDecision(self):
+        return self.decisions
+    
+    def pruning(self):
+        h.log("Pruning for [LEAF]")
+        return False
         
 class node():
     def __init__(self, S, column, value, fromIndex): # Edge instance
@@ -67,6 +93,23 @@ class node():
     def getNodeValue(self):
         return self.value
     
+    def countDecision(self):
+        out = dict()
+        for item in self.S:
+            val = list(item.values())[0] #  fx Rarely
+            
+            if val in out.keys():
+                out[val] += 1
+            else:
+                out[val] = 1
+                
+        decisions = []
+        
+        for dec in out:
+            decisions.append([dec, out[dec]])
+            
+        return decisions
+    
     def addNodeEnd(self):
         #check amount of decision for specified value of key
         firstDecision = None
@@ -82,9 +125,24 @@ class node():
                 if len(trimedS[0]) > 1 and len(trimedS) > 0:
                     return root(trimedS)
                 else:
-                    return leaf("[UNDEFINED]")
+                    # from trimedS get all possibles decision
+                    out = dict()
+                    for item in trimedS:
+                        val = list(item.values())[0] #  fx Rarely
+                        
+                        if val in out.keys():
+                            out[val] += 1
+                        else:
+                            out[val] = 1
+                            
+                    decisions = []
+                    
+                    for dec in out:
+                        decisions.append([dec, out[dec]])
+
+                    return leaf(decisions)
         h.log("End of node will be: leaf")
-        return leaf(firstDecision)                 # decisions for value are the same so we are sure we got an answear
+        return leaf([(firstDecision, len(self.S)) ])                # decisions for value are the same so we are sure we got an answear
     
     def getNodeEndIndex(self):
         return self.end.getItemIndex()
@@ -119,7 +177,7 @@ class root():
     def __init__(self, S):  # RRRRROOT instance
         
         if len(S[0]) <= 1 or len(S) <= 0:
-            h.log("Undefined deciosion for [LEAF]")
+            h.log2("Undefined deciosion for [LEAF]")
         else:
             
             #ROOT LIFECYCLE
@@ -135,7 +193,8 @@ class root():
             
             h.log("Another root ["+self.column+"]")
     
-            tc.addNode(tc.addIndex(), self.column)  # add node to accumulator
+
+            tc.addNode(tc.addIndex(), self.column, str(round(self.bestGain, 3)))  # add node to accumulator
             
             self.itemIndex = tc.getLast()
             self.addNodes()                         # add list with every kind of value for selected column
@@ -224,6 +283,7 @@ class root():
         for key, value in gainList.items():
             if value == best:
                 h.log("The best gain is: " + key + "[" + str(value) + "]")
+                self.bestGain = value
                 return key
             
     def countDecisionWhereKeyEqual(self, S, key, value, decision):
@@ -234,6 +294,24 @@ class root():
                 output += 1
                 
         return output
+    
+    def countDecision(self):
+        #something like SQL: SELECT decision, COUNT(decision) FROM S GROUP BY decision
+        out = dict()
+        for item in self.S:
+            val = list(item.values())[0]
+            
+            if val in out.keys():
+                out[val] += 1
+            else:
+                out[val] = 1
+                
+        decisions = []
+        
+        for dec in out:
+            decisions.append([dec, out[dec]])
+            
+        return decisions
             
     def getAvailableDecision(self, S):
         #return list of available decision, for example ['YES', 'NO']
@@ -291,18 +369,31 @@ class root():
             return False
         else:
             h.log2("-"+self.column+"?")
+            
             nextNode = requestRow[self.column]
             h.log2("---"+nextNode)
             nextItem = self.getNodeByValue(nextNode)
-            nodeEnd = nextItem.getNodeEnd()
+            nodeEnd = nextItem.getNodeEnd()             
+            
             if nodeEnd.__class__.__name__ == 'root':
                 return nodeEnd.getDecision(self.trimRowByColumn(requestRow, self.column))
             elif nodeEnd.__class__.__name__ == 'leaf':
-                h.log2("[Decision]: " + nodeEnd.getDecision())
                 return nodeEnd.getDecision()
             else:
                 h.log("Something is not yes here", "e")
-             
+    
+    def pruning(self):
+        h.log("Pruning for "+self.column+" [ROOT]")
+        rootDecision = self.countDecision()
+        
+        rootEndDecision = []
+        
+        for node in self.node:
+            rootOrLeaf = node.getNodeEnd()
+            rootEndDecision.append(rootOrLeaf.countDecision())
+            rootOrLeaf.pruning()
+        #print(rootDecision)
+        
             
 def main():
     
@@ -316,6 +407,14 @@ def main():
     except AttributeError:
         h.log("Invalid data", "e")
         pass
+    
+    
+    #PRUNING HERE
+    if s.prunning:
+        h.log("Starting tree's prunning...")
+        tree.pruning()
+        h.log("Tree's prunning completed")
+    
     
     #printing diagram
     #[TODO] - pack it into treeDrawer.draw()
@@ -331,7 +430,7 @@ def main():
             edge = ptp.Edge(src=e[0], dst=e[1], label=e[2])
             graph.add_edge(edge)
         for n in tc.nodes:
-            node = ptp.Node(name=n[0], label= n[1], fillcolor="white", style="filled", shape="box" )
+            node = ptp.Node(name=n[0], label= n[1]+'\n'+n[2], fillcolor="white", style="filled", shape="box" )
             graph.add_node(node)
         
         graph.write_png("./output/" + s.folder +".png")
@@ -362,7 +461,8 @@ def main():
                
             
             correctDecision = tree.getDecision(singleRow)
-            if decision == correctDecision:    
+            
+            if decision in correctDecision:    
                 correctAmount += 1
             else:
                 invalidRows.append(i)
