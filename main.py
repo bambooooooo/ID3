@@ -1,7 +1,10 @@
 import math
 import time
 import sys
+import copy
 
+import pydotplus as ptp
+from PIL import Image
 
 import helper as h
 import settings as s
@@ -34,6 +37,42 @@ class treeDrawer(): # accumulator for all nodes and egdes
     def getLast(self):
         return self.counter
     
+class counter():
+    
+    def __init__(self):
+        self.value = 1
+        
+    def getIndex(self):
+        self.value += 1
+        return self.value
+    
+    def getLastIndex(self):
+        return self.value
+    
+    def reset(self):
+        self.value = 1
+        return True
+
+class drawer():
+    def __init__(self):
+        self.edges = []
+        self.nodes = []
+        self.leafs = []
+        
+    def addNode(self, index, label, entropy):
+        self.nodes.append((index, label, entropy))
+        
+    def addEdge(self, fromIndex, toIndex, label):
+        self.edges.append((fromIndex, toIndex, label))
+    
+    def addLeaf(self, fromIndex, toIndex, label, values):
+        self.edges.append((fromIndex, toIndex, label, values))
+        
+    def reset(self):
+        self.edges = []
+        self.nodes = []
+        self.leafs = []
+
 tc = treeDrawer()
     
 
@@ -65,11 +104,17 @@ class leaf(): # LEAF - specific decision
     def getDecision(self):
         return self.decisions
     
+    def getFirstDecision(self):
+        return self.decisions[0]
+    
+    def getResponse(self):
+        return self.response
+    
     def countDecision(self):
         return self.decisions
     
     def pruning(self):
-        h.log("Pruning for [LEAF]")
+        h.log2("Pruning for [LEAF]")
         return False
         
 class node():
@@ -119,7 +164,7 @@ class node():
                 continue
             
             if firstDecision != self.getDecisionFromRow(row) and row[self.column] == self.value:
-                h.log("End of node will be: root") #for specified value for some column we have different decision
+                h.log2("End of node will be: root") #for specified value for some column we have different decision
                                                    #it will be another root
                 trimedS = self.trimSetByColumn(self.S, self.column, self.value)
                 if len(trimedS[0]) > 1 and len(trimedS) > 0:
@@ -141,7 +186,7 @@ class node():
                         decisions.append([dec, out[dec]])
 
                     return leaf(decisions)
-        h.log("End of node will be: leaf")
+        h.log2("End of node will be: leaf")
         return leaf([(firstDecision, len(self.S)) ])                # decisions for value are the same so we are sure we got an answear
     
     def getNodeEndIndex(self):
@@ -191,10 +236,10 @@ class root():
                                 #                                 Gain
                                 #          for select column with the best gain that will represents root instance
             
-            h.log("Another root ["+self.column+"]")
+            h.log2("Another root ["+self.column+"]")
     
 
-            tc.addNode(tc.addIndex(), self.column, str(round(self.bestGain, 3)))  # add node to accumulator
+#            tc.addNode(tc.addIndex(), self.column, str(round(self.bestGain, 3)))  # add node to accumulator
             
             self.itemIndex = tc.getLast()
             self.addNodes()                         # add list with every kind of value for selected column
@@ -213,7 +258,7 @@ class root():
         return list(self.S[0].keys())[:-1]  #get list of column without, of course, decision which is the last item
     
     def computeEntropy(self, S):
-        h.log("Compute entropy...")     # Computing entropy for root instance
+        h.log2("Compute entropy...")     # Computing entropy for root instance
                                         # Ent(S)
         entropy = dict()
         
@@ -238,7 +283,7 @@ class root():
         return output
     
     def computeGain(self, S, totalEnt):
-        h.log("Computing gain for nodes...") # prepare set of gains to select best of them later
+        h.log2("Computing gain for nodes...") # prepare set of gains to select best of them later
                                              # Gain = Ent(S) - Ent(S|a)
         output = dict()
         column = self.getColumn()
@@ -282,7 +327,7 @@ class root():
         best = max(gainList.values())
         for key, value in gainList.items():
             if value == best:
-                h.log("The best gain is: " + key + "[" + str(value) + "]")
+                h.log2("The best gain is: " + key + "[" + str(value) + "]")
                 self.bestGain = value
                 return key
             
@@ -358,7 +403,7 @@ class root():
         # for    each value that can occur for root's column
         
         for value in list(self.getValList(self.S, self.column).keys()):
-            h.log("Append node (S,"+self.column+", "+value +")")
+            h.log2("Append node (S,"+self.column+", "+value +")")
             self.node.append(node(self.S, self.column, value, self.itemIndex))
             # add node, add node, ...
             
@@ -382,18 +427,124 @@ class root():
             else:
                 h.log("Something is not yes here", "e")
     
-    def pruning(self):
-        h.log("Pruning for "+self.column+" [ROOT]")
-        rootDecision = self.countDecision()
+    def getNodeAndEdgeList(self, c, d):
         
-        rootEndDecision = []
+        recentIndex = c.getLastIndex()
+        
+        h.log2('[ROOT] #' + str(recentIndex))
+        
+        d.addNode(recentIndex, self.column, str(round(self.bestGain, 3)))
         
         for node in self.node:
-            rootOrLeaf = node.getNodeEnd()
-            rootEndDecision.append(rootOrLeaf.countDecision())
-            rootOrLeaf.pruning()
+            nextIndex = c.getIndex()
+            h.log2(str(recentIndex)+'-'+str(nextIndex))
+            
+            end = node.getNodeEnd()
+            
+            d.addEdge(recentIndex, nextIndex, node.getNodeValue())
+            
+            endType = end.__class__.__name__
+            if endType == 'root':
+                h.log2(end.column)
+                end.getNodeAndEdgeList(c, d)
+            else:
+                #it semms like it is leaf
+                h.log2("[LEAF] " + end.getFirstDecision())
+                d.addNode(nextIndex, end.getResponse(), "rows: "+str(end.amount))
+                
+    
+    def pruning(self):
+        h.log2("Pruning for "+self.column+" [ROOT]")
+        
+        rootDecision = self.countDecision()
+        
+        decisionSet = []
+        
+        isPruningHere = True
+        
+        itemToReplace = None
+        
+        if len(self.node) == 1:
+            
+            h.log("Pruning for "+self.column)
+            
+            if self.node[0].getNodeEnd().__class__.__name__ == "root":
+                
+                h.log("-->with [ROOT] "+self.node[0].getNodeEnd().column)
+#                h.log("Replacing Roots...")
+#                h.log("Root type: " + str(type(self)) + " @" + str(hex(id(self))))
+#                h.log("Child type: "+str(type(self.node[0].getNodeEnd())) + " at " + str(hex(id(self.node[0].getNodeEnd()))))
+#                self = copy.copy(self.node[0].getNodeEnd())   #HEHHEHEHHEHEHE
+                self = copy.deepcopy(self.node[0].getNodeEnd())
+#                h.log("self is located at " + str(hex(id(self))))
+#                h.BP()
+            else:
+                h.log("-->with [LEAF] "+self.node[0].getNodeEnd().getFirstDecision())
+#                self = self.node[0].getNodeEnd()    #HERERERERERERE
+                tempRoot = copy.deepcopy(self.node[0].end)
+                self = copy.deepcopy(tempRoot)
+#                self = copy.copy(self.node[0].getNodeEnd())
+                
+            self.pruning()
+            return False
+        
+        for node in self.node:
+            
+            end = node.getNodeEnd()
+            endType = end.__class__.__name__
+            
+            if endType == 'root':
+#               h.log("Pruning for [ROOT]")
+                end.pruning()
+            else:
+                #it semms like it is leaf
+                decisionSet.append(end.countDecision())
+                if rootDecision != end.countDecision():
+                    isPruningHere = False
+                itemToReplace = end
+        
+        if isPruningHere and itemToReplace != None:
+            h.log("Replace "+self.column+" with sth")
+            self = itemToReplace
+            self.pruning()
+        
         #print(rootDecision)
         
+class treeID3():
+    
+    def __init__(self, trainData):
+        self.trainData = trainData
+        self.structure = root(self.trainData)
+        self.c = counter()
+        self.d = drawer()
+        
+    def pruning(self):
+        self.structure.pruning()
+    
+    def draw(self):
+        
+        self.c.reset()
+        self.d.reset()
+        
+        self.structure.getNodeAndEdgeList(self.c, self.d)
+        
+        graph = ptp.Dot(graph_type='graph')
+        
+        
+        for e in self.d.edges:
+            h.log2("Add node from " + str(e[0]) + " to " + str(e[1]))
+            edge = ptp.Edge(src=e[0], dst=e[1], label=e[2])
+            graph.add_edge(edge)
+        for n in self.d.nodes:
+            node = ptp.Node(name=n[0], label= n[1]+'\n'+n[2], fillcolor="white", style="filled", shape="box" )
+            graph.add_node(node)
+        
+        graph.write_png("./output/" + s.folder +".png")
+        
+        img = Image.open("./output/" + s.folder +".png")
+        img.show()
+        
+        #drawIt
             
 def main():
     
@@ -402,12 +553,12 @@ def main():
         return False                        # data open error - exit
     
     tree = None
+    
     try:
-        tree = root(trainData)                       # power on carousel - load data from training source
+        tree = treeID3(trainData)                       # power on carousel - load data from training source
     except AttributeError:
         h.log("Invalid data", "e")
         pass
-    
     
     #PRUNING HERE
     if s.prunning:
@@ -419,25 +570,7 @@ def main():
     #printing diagram
     #[TODO] - pack it into treeDrawer.draw()
     if s.drawTree:
-        
-        import pydotplus as ptp
-        from PIL import Image
-        
-        graph = ptp.Dot(graph_type='graph')
-        
-        for e in tc.edges:
-            h.log("Add node from " + str(e[0]) + " to " + str(e[1]))
-            edge = ptp.Edge(src=e[0], dst=e[1], label=e[2])
-            graph.add_edge(edge)
-        for n in tc.nodes:
-            node = ptp.Node(name=n[0], label= n[1]+'\n'+n[2], fillcolor="white", style="filled", shape="box" )
-            graph.add_node(node)
-        
-        graph.write_png("./output/" + s.folder +".png")
-        
-        img = Image.open("./output/" + s.folder +".png")
-        img.show()
-        
+        tree.draw()
     # check tree's accuary    
     
     
@@ -460,7 +593,7 @@ def main():
                     singleRow[key] = value
                
             
-            correctDecision = tree.getDecision(singleRow)
+            correctDecision = tree.structure.getDecision(singleRow)
             
             if decision in correctDecision:    
                 correctAmount += 1
