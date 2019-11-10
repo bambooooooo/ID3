@@ -1,7 +1,4 @@
 import math
-import time
-import sys
-import copy
 
 import pydotplus as ptp
 from PIL import Image
@@ -113,9 +110,9 @@ class leaf(): # LEAF - specific decision
     def countDecision(self):
         return self.decisions
     
-    def pruning(self):
+    def pruning(self, parentInstance):
         h.log2("Pruning for [LEAF]")
-        return False
+        return self
         
 class node():
     def __init__(self, S, column, value, fromIndex): # Edge instance
@@ -452,63 +449,52 @@ class root():
                 h.log2("[LEAF] " + end.getFirstDecision())
                 d.addNode(nextIndex, end.getResponse(), "rows: "+str(end.amount))
                 
+    def isSetHasIdentityRows(self, S):
+        if len(S) <= 0:
+            h.log2("Empty Set", "w")
+            return False
+        first = S[0].getResponse()
+        for item in S:
+            if item.getResponse() != first:
+                return False
+        return True
     
-    def pruning(self):
+    def isLeafSetIsIdentity(self, S):
+        if len(S) <= 0:
+            h.log2("Empty Set", "w")
+            return True
+        
+        first = S[0]
+        for item in S:
+            if item != first:
+                return False
+        return True
+    
+    def pruning(self, parentInstance):
         h.log2("Pruning for "+self.column+" [ROOT]")
         
-        rootDecision = self.countDecision()
-        
-        decisionSet = []
-        
-        isPruningHere = True
-        
-        itemToReplace = None
-        
-        if len(self.node) == 1:
-            
-            h.log("Pruning for "+self.column)
-            
-            if self.node[0].getNodeEnd().__class__.__name__ == "root":
-                
-                h.log("-->with [ROOT] "+self.node[0].getNodeEnd().column)
-#                h.log("Replacing Roots...")
-#                h.log("Root type: " + str(type(self)) + " @" + str(hex(id(self))))
-#                h.log("Child type: "+str(type(self.node[0].getNodeEnd())) + " at " + str(hex(id(self.node[0].getNodeEnd()))))
-#                self = copy.copy(self.node[0].getNodeEnd())   #HEHHEHEHHEHEHE
-                self = copy.deepcopy(self.node[0].getNodeEnd())
-#                h.log("self is located at " + str(hex(id(self))))
-#                h.BP()
-            else:
-                h.log("-->with [LEAF] "+self.node[0].getNodeEnd().getFirstDecision())
-#                self = self.node[0].getNodeEnd()    #HERERERERERERE
-                tempRoot = copy.deepcopy(self.node[0].end)
-                self = copy.deepcopy(tempRoot)
-#                self = copy.copy(self.node[0].getNodeEnd())
-                
-            self.pruning()
-            return False
+        leafCollection = []
         
         for node in self.node:
-            
-            end = node.getNodeEnd()
-            endType = end.__class__.__name__
-            
-            if endType == 'root':
-#               h.log("Pruning for [ROOT]")
-                end.pruning()
-            else:
-                #it semms like it is leaf
-                decisionSet.append(end.countDecision())
-                if rootDecision != end.countDecision():
-                    isPruningHere = False
-                itemToReplace = end
+            if node.end.__class__.__name__ == "root":
+                h.log2("pruning for another root")
+                leafCollection += [node.end.pruning(self)]
+            elif node.end.__class__.__name__ == "leaf":
+                h.log2("pruning for another leaf")
+                leafCollection.append(node.end.pruning(self))
         
-        if isPruningHere and itemToReplace != None:
-            h.log("Replace "+self.column+" with sth")
-            self = itemToReplace
-            self.pruning()
+        if(self.isLeafSetIsIdentity(leafCollection)):
+            h.log2("Pruning for "+self.column+", change with "+leafCollection[0].getFirstDecision())
+            
+            
+            # CHANGE IT HERE
+            for node in parentInstance.node:
+                if node.end.__class__.__name__ == "root" and node.end.column == self.column:
+                    node.end = leafCollection[0]
+                    return leafCollection[0]
+            
+        return leafCollection
         
-        #print(rootDecision)
         
 class treeID3():
     
@@ -519,7 +505,7 @@ class treeID3():
         self.d = drawer()
         
     def pruning(self):
-        self.structure.pruning()
+        self.structure.pruning(self.structure)
     
     def draw(self):
         
@@ -550,32 +536,35 @@ def main():
     
     trainData = h.getDataFromFile(s.trainFile)   # open data file
     if not trainData:
-        return False                        # data open error - exit
+        return False                        # data open error -> exit
     
     tree = None
     
     try:
+        h.log("Bulding tree...")
         tree = treeID3(trainData)                       # power on carousel - load data from training source
+        h.log("Bulding tree completed")
     except AttributeError:
         h.log("Invalid data", "e")
         pass
     
-    #PRUNING HERE
+    if s.drawTree and s.drawTreeBeforePruning:
+        h.log("Drawing tree before prunning...")
+        tree.draw()
+        h.log("Drawing completed")
+    
     if s.prunning:
         h.log("Starting tree's prunning...")
         tree.pruning()
         h.log("Tree's prunning completed")
     
-    
-    #printing diagram
-    #[TODO] - pack it into treeDrawer.draw()
     if s.drawTree:
+        h.log("Drawing tree before prunning...")
         tree.draw()
-    # check tree's accuary    
-    
+        h.log("Drawing completed")
     
     if s.checkTree:
-        h.log("Checking tree with check dataset...")
+        h.log("Calculating tree's accuracy...")
         checkData = h.getDataFromFile(s.checkFile)
         correctAmount = 0
         
@@ -602,10 +591,10 @@ def main():
                 
                 
         accuary = correctAmount / len(checkData)
-        h.log("Tree accuaracy is: " + str(correctAmount) + "/" + str(len(checkData))  + " ("+ str(accuary*100) + "%)")
+        h.log("Tree accuaracy is: " + str(correctAmount) + "/" + str(len(checkData))  + " ("+ str(round(accuary*100)) + "%)")
         
-        h.log("Invalid rows to delete")
-        print(invalidRows)
+#        h.log("Invalid rows to delete")
+#        print(invalidRows)
         
         #h.deleteRow(s.trainFile, invalidRows)
 

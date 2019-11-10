@@ -108,6 +108,17 @@ def deleteRow(source, rowList):
         log("File does not exists", "e")
         return False
     
+# 6. flatten --> numpy.ndarray.flateen() equivalent
+def flatten(tab):
+    output = []
+    for item in tab:
+        if item.__class__.__name__ == 'list':
+            output+=(flatten(item))
+        else:
+            output.append(item)
+    return output
+
+    
 def checkAsTrain(source):
     #ONLY DEBUG FUNCTION
     os.remove(s.trainFile)
