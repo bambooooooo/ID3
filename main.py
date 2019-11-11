@@ -1,4 +1,5 @@
 import math
+import random
 
 import pydotplus as ptp
 from PIL import Image
@@ -415,7 +416,14 @@ class root():
             nextNode = requestRow[self.column]
             h.log2("---"+nextNode)
             nextItem = self.getNodeByValue(nextNode)
-            nodeEnd = nextItem.getNodeEnd()             
+            
+            if nextItem == None or nextItem.end == None:
+                h.log2("Something is not yes here [ROOT: "+self.column+"]", "e")
+                return []
+            
+            nodeEnd = nextItem.getNodeEnd()
+            
+                
             
             if nodeEnd.__class__.__name__ == 'root':
                 return nodeEnd.getDecision(self.trimRowByColumn(requestRow, self.column))
@@ -470,6 +478,16 @@ class root():
                 return False
         return True
     
+    def walk(self):
+        h.log("[ROOT] "+self.column)
+        for node in self.node:
+            if node.end.__class__.__name__ == 'root':
+                node.end.walk()
+            elif node.end.__class__.__name__ == 'leaf':
+                h.log("[LEAF] "+node.end.getFirstDecision())
+            else:
+                h.log("["+node.end.__class__.__name__+"] Undefined end of node", "w")
+    
     def pruning(self, parentInstance):
         h.log2("Pruning for "+self.column+" [ROOT]")
         
@@ -506,6 +524,10 @@ class treeID3():
         
     def pruning(self):
         self.structure.pruning(self.structure)
+        
+    def walk(self):
+        #debug function that walk throught each element in tree
+        self.structure.walk()
     
     def draw(self):
         
@@ -529,14 +551,68 @@ class treeID3():
         
         img = Image.open("./output/" + s.folder +".png")
         img.show()
+    
+    def check(self, checkData):
         
-        #drawIt
+        correctAmount = 0
+        invalidRows = []
+        
+        for i, row in enumerate(checkData):
+            
+            decision = row[list(row)[-1]]
+            
+            singleRow = dict()
+    
+            for key, value in row.items():
+                if key != list(row)[-1]:
+                    singleRow[key] = value
+               
+            
+            correctDecision = self.structure.getDecision(singleRow)
+            if correctDecision == None:
+                correctDecision = []
+            
+            if decision in correctDecision:    
+                correctAmount += 1
+            else:
+                invalidRows.append(i)
+                
+        #invalidRows[] - contains rows that did not pass the check
+        accuracy = correctAmount / len(checkData)
+        
+        return accuracy 
+#        h.log("Tree accuaracy is: " + str(correctAmount) + "/" + str(len(checkData))  + " ("+ str(round(accuary*100)) + "%)")
+        
+        
             
 def main():
     
-    trainData = h.getDataFromFile(s.trainFile)   # open data file
-    if not trainData:
+    data = h.getDataFromFile(s.trainFile)   # open data file
+    if not data:
         return False                        # data open error -> exit
+    
+    if s.trainSetPercentage <= 0 or s.trainSetPercentage >= 100:
+        h.log("Invalid settings.trainSetPercentage, it will be value in range (0;100)", "e")
+        return False
+    
+    if len(data) < 2:
+        h.log("Too small dataset to build and check tree", "e")
+        return False
+    
+    splitIndex = int(len(data) * s.trainSetPercentage // 100) # [0,1,2,...splitIndex.............N-1,N]
+    
+    if s.shuffleSet:
+        h.log("Suffling set before split...")
+        random.shuffle(data)
+        h.log("Shuffling completed")
+    
+    h.log("Spliting data in train and check set...")
+    h.log("Spliting ratio "+str(s.trainSetPercentage)+":"+str(100-s.trainSetPercentage))
+    
+    
+    trainData = data[:splitIndex]
+    checkData = data[splitIndex:]
+    
     
     tree = None
     
@@ -562,41 +638,12 @@ def main():
         h.log("Drawing tree before prunning...")
         tree.draw()
         h.log("Drawing completed")
+        
+#    tree.walk()
     
     if s.checkTree:
         h.log("Calculating tree's accuracy...")
-        checkData = h.getDataFromFile(s.checkFile)
-        correctAmount = 0
-        
-        
-        invalidRows = []
-        
-        for i, row in enumerate(checkData):
-            
-            decision = row[list(row)[-1]]
-            
-            singleRow = dict()
-    
-            for key, value in row.items():
-                if key != list(row)[-1]:
-                    singleRow[key] = value
-               
-            
-            correctDecision = tree.structure.getDecision(singleRow)
-            
-            if decision in correctDecision:    
-                correctAmount += 1
-            else:
-                invalidRows.append(i)
-                
-                
-        accuary = correctAmount / len(checkData)
-        h.log("Tree accuaracy is: " + str(correctAmount) + "/" + str(len(checkData))  + " ("+ str(round(accuary*100)) + "%)")
-        
-#        h.log("Invalid rows to delete")
-#        print(invalidRows)
-        
-        #h.deleteRow(s.trainFile, invalidRows)
-
+        acc = round(tree.check(checkData)*100,2)
+        h.log("Tree's accuracy is: " + str(acc) + "%")
     
 main()

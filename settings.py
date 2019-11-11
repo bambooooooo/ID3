@@ -2,28 +2,31 @@ debugMode = False
 deepDebug = False                           
 drawTree = False    
 drawTreeBeforePruning = False                        
-#checkTree = False 
+checkTree = False 
 prunning = False                          
+shuffleSet = False
 
-debugMode = True                           # set to false in production
-#deepDebug = True                           # print h.log2() as well
-drawTree = True                            # draw flag
-drawTreeBeforePruning = True               # draw tree before pruning aswell
-checkTree = True                           # check tree with checkset
-prunning = True
+debugMode = True                            # print debug logs  -->  helper.log()
+#deepDebug = True                           # print deeper logs -->  helper.log2() if debugMode is ON
+drawTree = True                            # draw computed tree
+drawTreeBeforePruning = True                # draw tree before pruning
+checkTree = True                            # check tree with checkset
+prunning = True                             # ON/OFF pruning
+shuffleSet = True                           # Shuffle dataset before split into trainset and checkset
 
-# Select directory froum resources 
+# Select set froum resources 
 
 #folder = 'db2'
 #folder = 'db'
 #folder = 'alco'
-#folder = 'pub'
+folder = 'pub'
 #folder = 'pubPruning'
 #folder = 'pubTrimed'
 #folder = 'demo'
 #folder = 'cardio'
-folder = 'heart'
+#folder = 'heart'
 
 trainFile = './resources/'+folder+'/trainSet.csv'  # path to train dataset
-checkFile = './resources/'+folder+'/checkSet.csv'  # path to check dataset
+
+trainSetPercentage = 80 #part of dataset that will be trinSet, rest of will be checkSet
 
